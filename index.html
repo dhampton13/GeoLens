@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoLens — World Overview</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #060d1a; overflow: hidden; }
+    #app { position: relative; width: 100vw; height: 100vh; background: #0a0f1a; overflow: hidden; }
+    #map-container { width: 100%; height: 100%; cursor: grab; }
+    #map-container:active { cursor: grabbing; }
+    svg#worldmap { width: 100%; height: 100%; display: block; }
+    .country-path { stroke: #1a2540; stroke-width: 0.5; transition: opacity 0.15s; cursor: pointer; }
+    .country-path:hover { opacity: 0.75; stroke: #ffffff; stroke-width: 1; }
+    .country-path.selected { stroke: #ffffff; stroke-width: 1.5; opacity: 1; }
+
+    #toolbar {
+      position: absolute; top: 16px; left: 16px;
+      display: flex; gap: 8px; flex-wrap: wrap; z-index: 10;
+    }
+    .lens-btn {
+      padding: 7px 15px; border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(10,15,26,0.85);
+      color: rgba(255,255,255,0.75); font-size: 13px;
+      cursor: pointer; transition: all 0.2s;
+      backdrop-filter: blur(6px);
+    }
+    .lens-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+    .lens-btn.active { background: rgba(255,255,255,0.92); color: #0a0f1a; font-weight: 600; }
+
+    #title-badge {
+      position: absolute; top: 16px; right: 16px;
+      background: rgba(10,15,26,0.85);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px; padding: 10px 16px;
+      backdrop-filter: blur(6px);
+    }
+    #title-badge h1 { font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.95); letter-spacing: 0.06em; text-transform: uppercase; }
+    #title-badge p { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 3px; }
+
+    #legend {
+      position: absolute; bottom: 16px; left: 16px;
+      background: rgba(10,15,26,0.85);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; padding: 12px 16px;
+      backdrop-filter: blur(6px); min-width: 140px;
+    }
+    #legend h3 { font-size: 11px; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 9px; }
+    .legend-item { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+    .legend-swatch { width: 13px; height: 13px; border-radius: 3px; flex-shrink: 0; }
+    .legend-label { font-size: 12px; color: rgba(255,255,255,0.7); }
+
+    #info-panel {
+      position: absolute; right: 0; top: 0; bottom: 0;
+      width: 300px;
+      background: #0d1526;
+      border-left: 1px solid rgba(255,255,255,0.08);
+      transform: translateX(100%);
+      transition: transform 0.32s cubic-bezier(0.16,1,0.3,1);
+      z-index: 20; overflow-y: auto;
+    }
+    #info-panel.open { transform: translateX(0); }
+
+    #panel-header {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      display: flex; justify-content: space-between; align-items: flex-start;
+      position: sticky; top: 0; background: #0d1526; z-index: 1;
+    }
+    #panel-flag { font-size: 38px; line-height: 1; margin-bottom: 7px; }
+    #panel-name { font-size: 19px; font-weight: 600; color: #fff; }
+    #panel-subtitle { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 3px; }
+    #panel-close {
+      background: none; border: none; color: rgba(255,255,255,0.4);
+      font-size: 20px; cursor: pointer; padding: 2px 8px;
+      border-radius: 5px; line-height: 1;
+    }
+    #panel-close:hover { color: #fff; background: rgba(255,255,255,0.08); }
+
+    .panel-section { padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .panel-section h4 {
+      font-size: 10px; color: rgba(255,255,255,0.3);
+      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 11px;
+    }
+    .panel-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .panel-key { font-size: 13px; color: rgba(255,255,255,0.45); }
+    .panel-val { font-size: 13px; color: rgba(255,255,255,0.85); text-align: right; max-width: 165px; }
+
+    .tag {
+      display: inline-block; padding: 3px 9px;
+      border-radius: 12px; font-size: 12px; margin: 2px 3px 2px 0;
+    }
+    .tag.ally { background: rgba(29,158,117,0.18); color: #5DCAA5; border: 1px solid rgba(29,158,117,0.3); }
+    .tag.rival { background: rgba(216,90,48,0.18); color: #F0997B; border: 1px solid rgba(216,90,48,0.3); }
+    .tag.export { background: rgba(55,138,221,0.18); color: #85B7EB; border: 1px solid rgba(55,138,221,0.3); }
+
+    #leader-card { display: flex; align-items: center; gap: 13px; }
+    #leader-avatar {
+      width: 48px; height: 48px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; background: rgba(255,255,255,0.07); flex-shrink: 0;
+    }
+    #leader-name { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.88); }
+    #leader-title { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 3px; }
+
+    .agenda-item {
+      font-size: 13px; color: rgba(255,255,255,0.65);
+      padding: 6px 10px; background: rgba(255,255,255,0.04);
+      border-radius: 6px; margin-bottom: 6px;
+      border-left: 2px solid rgba(255,255,255,0.15);
+    }
+
+    #hint {
+      position: absolute; bottom: 16px; right: 16px;
+      font-size: 12px; color: rgba(255,255,255,0.28);
+      pointer-events: none;
+    }
+
+    #loading {
+      position: absolute; inset: 0; display: flex;
+      align-items: center; justify-content: center;
+      background: #060d1a; z-index: 50; flex-direction: column; gap: 12px;
+    }
+    #loading p { color: rgba(255,255,255,0.4); font-size: 13px; }
+    .spinner {
+      width: 28px; height: 28px; border: 2px solid rgba(255,255,255,0.1);
+      border-top-color: rgba(255,255,255,0.5); border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>Loading world map…</p>
+  </div>
+
+  <div id="map-container">
+    <svg id="worldmap" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+
+  <div id="toolbar">
+    <button class="lens-btn active" data-lens="default">Default</button>
+    <button class="lens-btn" data-lens="government">Government</button>
+    <button class="lens-btn" data-lens="religion">Religion</button>
+    <button class="lens-btn" data-lens="alliances">Alliances</button>
+    <button class="lens-btn" data-lens="gdp">GDP tier</button>
+  </div>
+
+  <div id="title-badge">
+    <h1>GeoLens</h1>
+    <p>World overview — prototype</p>
+  </div>
+
+  <div id="legend">
+    <h3 id="legend-title">Lens</h3>
+    <div id="legend-items"></div>
+  </div>
+
+  <div id="info-panel">
+    <div id="panel-header">
+      <div>
+        <div id="panel-flag"></div>
+        <div id="panel-name"></div>
+        <div id="panel-subtitle"></div>
+      </div>
+      <button id="panel-close">✕</button>
+    </div>
+    <div class="panel-section">
+      <h4>Leader</h4>
+      <div id="leader-card">
+        <div id="leader-avatar"></div>
+        <div><div id="leader-name"></div><div id="leader-title"></div></div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <h4>Overview</h4>
+      <div id="panel-overview"></div>
+    </div>
+    <div class="panel-section">
+      <h4>Main exports</h4>
+      <div id="panel-exports"></div>
+    </div>
+    <div class="panel-section">
+      <h4>Allies</h4>
+      <div id="panel-allies"></div>
+    </div>
+    <div class="panel-section">
+      <h4>Rivals</h4>
+      <div id="panel-rivals"></div>
+    </div>
+    <div class="panel-section">
+      <h4>Current agendas</h4>
+      <div id="panel-agendas"></div>
+    </div>
+  </div>
+
+  <div id="hint">click any highlighted country</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<script>
+
+// ─────────────────────────────────────────────
+//  COUNTRY DATA — add more countries here
+// ─────────────────────────────────────────────
+const COUNTRIES = {
+  "USA": { name:"United States", flag:"🇺🇸", government:"Democracy", religion:"Christian", alliance:"NATO/G7", gdp:"high", leader:"Joe Biden", leaderTitle:"46th President", leaderEmoji:"🎩", exports:["Technology","Arms","Agriculture","Finance"], allies:["EU","UK","Japan","Australia"], rivals:["China","Russia","Iran"], agendas:["Global democracy promotion","Climate leadership","Indo-Pacific strategy","NATO reinforcement"], pop:"331M", capital:"Washington D.C." },
+  "RUS": { name:"Russia", flag:"🇷🇺", government:"Autocracy", religion:"Orthodox", alliance:"CSTO", gdp:"mid", leader:"Vladimir Putin", leaderTitle:"President", leaderEmoji:"🐻", exports:["Oil","Gas","Arms","Wheat"], allies:["Belarus","Iran","China"], rivals:["NATO","Ukraine","EU"], agendas:["Sphere of influence restoration","Energy leverage","Anti-NATO expansion","Ukraine control"], pop:"144M", capital:"Moscow" },
+  "CHN": { name:"China", flag:"🇨🇳", government:"Authoritarian", religion:"Non-religious", alliance:"SCO", gdp:"high", leader:"Xi Jinping", leaderTitle:"General Secretary", leaderEmoji:"🐉", exports:["Electronics","Machinery","Steel","Textiles"], allies:["Russia","Pakistan","Cambodia"], rivals:["USA","India","Taiwan"], agendas:["Belt & Road Initiative","Taiwan reunification","South China Sea dominance","Tech self-sufficiency"], pop:"1.4B", capital:"Beijing" },
+  "IND": { name:"India", flag:"🇮🇳", government:"Democracy", religion:"Hindu", alliance:"Non-aligned", gdp:"mid", leader:"Narendra Modi", leaderTitle:"Prime Minister", leaderEmoji:"🪷", exports:["IT services","Pharmaceuticals","Textiles","Gems"], allies:["USA","Israel","UAE"], rivals:["Pakistan","China"], agendas:["Global South leadership","Digital economy","Border security","Space program"], pop:"1.4B", capital:"New Delhi" },
+  "BRA": { name:"Brazil", flag:"🇧🇷", government:"Democracy", religion:"Christian", alliance:"BRICS", gdp:"mid", leader:"Luiz Lula da Silva", leaderTitle:"President", leaderEmoji:"🌿", exports:["Soybeans","Iron ore","Beef","Oil"], allies:["Argentina","China","EU"], rivals:[], agendas:["Amazon protection","South-South diplomacy","Poverty reduction","Agricultural dominance"], pop:"214M", capital:"Brasília" },
+  "DEU": { name:"Germany", flag:"🇩🇪", government:"Democracy", religion:"Christian", alliance:"NATO/EU", gdp:"high", leader:"Olaf Scholz", leaderTitle:"Chancellor", leaderEmoji:"⚙️", exports:["Cars","Machinery","Chemicals","Pharma"], allies:["France","USA","Poland","UK"], rivals:["Russia"], agendas:["EU cohesion","Energy transition","Industrial competitiveness","Ukraine support"], pop:"83M", capital:"Berlin" },
+  "SAU": { name:"Saudi Arabia", flag:"🇸🇦", government:"Monarchy", religion:"Islam", alliance:"Arab League", gdp:"high", leader:"Mohammed bin Salman", leaderTitle:"Crown Prince / PM", leaderEmoji:"🌙", exports:["Oil","Petrochemicals","Plastics"], allies:["UAE","USA","Egypt"], rivals:["Iran","Yemen/Houthis"], agendas:["Vision 2030 diversification","Regional Sunni leadership","OPEC+ control","Abraham Accords expansion"], pop:"35M", capital:"Riyadh" },
+  "NGA": { name:"Nigeria", flag:"🇳🇬", government:"Democracy", religion:"Mixed", alliance:"AU/ECOWAS", gdp:"low", leader:"Bola Tinubu", leaderTitle:"President", leaderEmoji:"🦅", exports:["Oil","Gas","Cocoa","Tin"], allies:["USA","UK","Ghana"], rivals:[], agendas:["Regional security","Oil sector reform","Naira stabilization","Counterterrorism"], pop:"220M", capital:"Abuja" },
+  "AUS": { name:"Australia", flag:"🇦🇺", government:"Democracy", religion:"Christian", alliance:"AUKUS/Five Eyes", gdp:"high", leader:"Anthony Albanese", leaderTitle:"Prime Minister", leaderEmoji:"🦘", exports:["Iron ore","Coal","LNG","Education"], allies:["USA","UK","Japan","New Zealand"], rivals:["China"], agendas:["AUKUS submarine deal","Pacific stability","Net zero by 2050","Diplomatic reset with China"], pop:"26M", capital:"Canberra" },
+  "TUR": { name:"Turkey", flag:"🇹🇷", government:"Democracy", religion:"Islam", alliance:"NATO", gdp:"mid", leader:"Recep Erdoğan", leaderTitle:"President", leaderEmoji:"🌙", exports:["Machinery","Cars","Textiles","Steel"], allies:["Qatar","Azerbaijan"], rivals:["Greece","Armenia","Syria/Kurds"], agendas:["NATO leverage","Grain deal mediation","Pan-Turkic influence","Economic stabilization"], pop:"85M", capital:"Ankara" },
+  "FRA": { name:"France", flag:"🇫🇷", government:"Democracy", religion:"Christian", alliance:"NATO/EU", gdp:"high", leader:"Emmanuel Macron", leaderTitle:"President", leaderEmoji:"🗼", exports:["Aerospace","Luxury goods","Pharma","Agriculture"], allies:["Germany","USA","UK"], rivals:["Russia"], agendas:["EU strategic autonomy","Africa policy reset","Nuclear energy push","Ukraine support"], pop:"68M", capital:"Paris" },
+  "IRN": { name:"Iran", flag:"🇮🇷", government:"Theocracy", religion:"Islam", alliance:"Axis of Resistance", gdp:"low", leader:"Ali Khamenei", leaderTitle:"Supreme Leader", leaderEmoji:"⚡", exports:["Oil","Gas","Petrochemicals","Pistachios"], allies:["Russia","Hezbollah","Hamas","Houthis"], rivals:["USA","Israel","Saudi Arabia"], agendas:["Nuclear program","Proxy network expansion","Sanctions evasion","Regime survival"], pop:"87M", capital:"Tehran" },
+  "JPN": { name:"Japan", flag:"🇯🇵", government:"Democracy", religion:"Buddhist/Shinto", alliance:"G7/Quad", gdp:"high", leader:"Fumio Kishida", leaderTitle:"Prime Minister", leaderEmoji:"⛩️", exports:["Cars","Electronics","Machinery","Chemicals"], allies:["USA","Australia","South Korea"], rivals:["China","North Korea"], agendas:["Defense buildup","Chip supply chains","Aging population","Regional security"], pop:"125M", capital:"Tokyo" },
+  "ZAF": { name:"South Africa", flag:"🇿🇦", government:"Democracy", religion:"Christian", alliance:"AU/BRICS", gdp:"mid", leader:"Cyril Ramaphosa", leaderTitle:"President", leaderEmoji:"🌍", exports:["Gold","Platinum","Coal","Iron ore"], allies:["China","Russia","Brazil"], rivals:[], agendas:["Load-shedding crisis","BRICS expansion","Non-aligned foreign policy","Unemployment reform"], pop:"60M", capital:"Pretoria" },
+  "MEX": { name:"Mexico", flag:"🇲🇽", government:"Democracy", religion:"Christian", alliance:"USMCA", gdp:"mid", leader:"Andrés Manuel López Obrador", leaderTitle:"President", leaderEmoji:"🌵", exports:["Cars","Electronics","Oil","Agriculture"], allies:["USA","Canada","Brazil"], rivals:[], agendas:["Nearshoring boom","Cartel security","US migration diplomacy","Energy nationalism"], pop:"130M", capital:"Mexico City" },
+  "GBR": { name:"United Kingdom", flag:"🇬🇧", government:"Democracy", religion:"Christian", alliance:"NATO/G7/AUKUS", gdp:"high", leader:"Rishi Sunak", leaderTitle:"Prime Minister", leaderEmoji:"🎩", exports:["Finance","Aerospace","Pharma","Whisky"], allies:["USA","Australia","France"], rivals:["Russia"], agendas:["Post-Brexit trade","AUKUS delivery","Ukraine aid","Northern Ireland protocol"], pop:"68M", capital:"London" },
+};
+
+// ─────────────────────────────────────────────
+//  LENS DEFINITIONS — add new lenses here
+// ─────────────────────────────────────────────
+const LENSES = {
+  default: { title:"Countries", legend: [] },
+  government: {
+    title:"Government type",
+    values: { Democracy:"#1D9E75", Autocracy:"#D85A30", Monarchy:"#7F77DD", Theocracy:"#BA7517", Authoritarian:"#E24B4A" },
+    get: c => c.government,
+    legend: [["Democracy","#1D9E75"],["Autocracy","#D85A30"],["Monarchy","#7F77DD"],["Theocracy","#BA7517"],["Authoritarian","#E24B4A"]]
+  },
+  religion: {
+    title:"Majority religion",
+    values: { Christian:"#378ADD", Islam:"#1D9E75", Hindu:"#EF9F27", "Buddhist/Shinto":"#D4537E", Orthodox:"#7F77DD", "Non-religious":"#888780", Mixed:"#97C459" },
+    get: c => c.religion,
+    legend: [["Christian","#378ADD"],["Islam","#1D9E75"],["Hindu","#EF9F27"],["Buddhist/Shinto","#D4537E"],["Orthodox","#7F77DD"],["Non-religious","#888780"]]
+  },
+  alliances: {
+    title:"Alliance bloc",
+    values: { "NATO/G7":"#378ADD","NATO/EU":"#85B7EB","CSTO":"#D85A30","SCO":"#E24B4A","Non-aligned":"#888780","BRICS":"#EF9F27","Arab League":"#1D9E75","AU/ECOWAS":"#97C459","AUKUS/Five Eyes":"#378ADD","Axis of Resistance":"#A32D2D","G7/Quad":"#B5D4F4","AU/BRICS":"#EF9F27","USMCA":"#5DCAA5","NATO/G7/AUKUS":"#378ADD","NATO":"#85B7EB" },
+    get: c => c.alliance,
+    legend: [["NATO/West","#378ADD"],["Russia/CSTO","#D85A30"],["China/SCO","#E24B4A"],["Non-aligned","#888780"],["BRICS","#EF9F27"]]
+  },
+  gdp: {
+    title:"GDP tier",
+    values: { high:"#1D9E75", mid:"#EF9F27", low:"#D85A30" },
+    get: c => c.gdp,
+    legend: [["High income","#1D9E75"],["Middle income","#EF9F27"],["Lower income","#D85A30"]]
+  }
+};
+
+// ─────────────────────────────────────────────
+//  NUMERIC ISO → ISO3 mapping (UN country codes)
+// ─────────────────────────────────────────────
+const iso3map = {
+  "840":"USA","643":"RUS","156":"CHN","356":"IND","076":"BRA",
+  "276":"DEU","682":"SAU","566":"NGA","036":"AUS","792":"TUR",
+  "250":"FRA","364":"IRN","392":"JPN","710":"ZAF","484":"MEX","826":"GBR"
+};
+
+// ─────────────────────────────────────────────
+//  APP STATE
+// ─────────────────────────────────────────────
+let currentLens = "default";
+let selectedISO = null;
+let pathsByISO = {};
+let vb = [0, 0, 1000, 500];
+
+function getColor(iso) {
+  const lens = LENSES[currentLens];
+  const data = COUNTRIES[iso];
+  if (!data) return "#1a2e4a";
+  if (currentLens === "default") return "#1e3a5f";
+  const val = lens.get(data);
+  return (lens.values && lens.values[val]) || "#1a2e4a";
+}
+
+function updateColors() {
+  Object.entries(pathsByISO).forEach(([iso, el]) => {
+    el.attr("fill", getColor(iso));
+  });
+}
+
+function updateLegend() {
+  const lens = LENSES[currentLens];
+  document.getElementById("legend-title").textContent = lens.title;
+  const container = document.getElementById("legend-items");
+  container.innerHTML = "";
+  if (lens.legend && lens.legend.length) {
+    lens.legend.forEach(([label, color]) => {
+      container.innerHTML += `<div class="legend-item"><div class="legend-swatch" style="background:${color}"></div><span class="legend-label">${label}</span></div>`;
+    });
+  } else {
+    container.innerHTML = `<div class="legend-label" style="color:rgba(255,255,255,0.35)">All countries shown</div>`;
+  }
+}
+
+function openPanel(iso) {
+  const d = COUNTRIES[iso];
+  if (!d) return;
+  selectedISO = iso;
+  document.getElementById("panel-flag").textContent = d.flag;
+  document.getElementById("panel-name").textContent = d.name;
+  document.getElementById("panel-subtitle").textContent = `${d.capital} · ${d.pop}`;
+  document.getElementById("leader-avatar").textContent = d.leaderEmoji;
+  document.getElementById("leader-name").textContent = d.leader;
+  document.getElementById("leader-title").textContent = d.leaderTitle;
+  document.getElementById("panel-overview").innerHTML = `
+    <div class="panel-row"><span class="panel-key">Government</span><span class="panel-val">${d.government}</span></div>
+    <div class="panel-row"><span class="panel-key">Religion</span><span class="panel-val">${d.religion}</span></div>
+    <div class="panel-row"><span class="panel-key">Alliance</span><span class="panel-val">${d.alliance}</span></div>
+    <div class="panel-row"><span class="panel-key">Population</span><span class="panel-val">${d.pop}</span></div>
+  `;
+  document.getElementById("panel-exports").innerHTML =
+    d.exports.map(e => `<span class="tag export">${e}</span>`).join("");
+  document.getElementById("panel-allies").innerHTML =
+    d.allies.length
+      ? d.allies.map(a => `<span class="tag ally">${a}</span>`).join("")
+      : `<span style="font-size:13px;color:rgba(255,255,255,0.3)">None listed</span>`;
+  document.getElementById("panel-rivals").innerHTML =
+    d.rivals.length
+      ? d.rivals.map(r => `<span class="tag rival">${r}</span>`).join("")
+      : `<span style="font-size:13px;color:rgba(255,255,255,0.3)">None listed</span>`;
+  document.getElementById("panel-agendas").innerHTML =
+    d.agendas.map(a => `<div class="agenda-item">${a}</div>`).join("");
+
+  document.getElementById("info-panel").classList.add("open");
+  document.getElementById("hint").style.display = "none";
+  Object.entries(pathsByISO).forEach(([k, el]) => el.classed("selected", k === iso));
+}
+
+function closePanel() {
+  document.getElementById("info-panel").classList.remove("open");
+  document.getElementById("hint").style.display = "";
+  selectedISO = null;
+  Object.values(pathsByISO).forEach(el => el.classed("selected", false));
+}
+
+document.getElementById("panel-close").addEventListener("click", closePanel);
+
+document.querySelectorAll(".lens-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".lens-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentLens = btn.dataset.lens;
+    updateColors();
+    updateLegend();
+  });
+});
+
+// ─────────────────────────────────────────────
+//  MAP INIT
+// ─────────────────────────────────────────────
+async function initMap() {
+  const res = await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json");
+  const world = await res.json();
+  const countries = topojson.feature(world, world.objects.countries);
+
+  const svg = d3.select("#worldmap");
+  const w = 1000, h = 500;
+  const projection = d3.geoNaturalEarth1().scale(155).translate([w / 2, h / 2]);
+  const path = d3.geoPath().projection(projection);
+
+  svg.append("rect").attr("width", w).attr("height", h).attr("fill", "#060d1a");
+
+  svg.selectAll(".country-path")
+    .data(countries.features)
+    .join("path")
+    .attr("class", "country-path")
+    .attr("d", path)
+    .attr("fill", d => {
+      const iso = iso3map[d.id] || iso3map[String(d.id).padStart(3, "0")];
+      return iso ? getColor(iso) : "#1a2e4a";
+    })
+    .each(function(d) {
+      const iso = iso3map[d.id] || iso3map[String(d.id).padStart(3, "0")];
+      if (iso) pathsByISO[iso] = d3.select(this);
+    })
+    .on("click", function(event, d) {
+      const iso = iso3map[d.id] || iso3map[String(d.id).padStart(3, "0")];
+      if (iso && COUNTRIES[iso]) openPanel(iso);
+    });
+
+  document.getElementById("loading").style.display = "none";
+  updateLegend();
+
+  // ── Pan & zoom ──
+  let isDragging = false, startX, startY, startVB;
+
+  function setVB() { svg.attr("viewBox", vb.join(" ")); }
+
+  svg.on("mousedown", e => {
+    isDragging = true;
+    startX = e.clientX; startY = e.clientY;
+    startVB = [...vb];
+  });
+  window.addEventListener("mousemove", e => {
+    if (!isDragging) return;
+    const dx = (e.clientX - startX) * (vb[2] / svg.node().clientWidth);
+    const dy = (e.clientY - startY) * (vb[3] / svg.node().clientHeight);
+    vb[0] = Math.max(-200, Math.min(300, startVB[0] - dx));
+    vb[1] = Math.max(-100, Math.min(150, startVB[1] - dy));
+    setVB();
+  });
+  window.addEventListener("mouseup", () => { isDragging = false; });
+
+  svg.on("wheel", e => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 1.12 : 0.88;
+    const cx = vb[0] + vb[2] / 2;
+    const cy = vb[1] + vb[3] / 2;
+    const nw = Math.max(280, Math.min(1000, vb[2] * factor));
+    const nh = Math.max(140, Math.min(500, vb[3] * factor));
+    vb[0] = cx - nw / 2;
+    vb[1] = cy - nh / 2;
+    vb[2] = nw;
+    vb[3] = nh;
+    setVB();
+  }, { passive: false });
+}
+
+initMap().catch(err => {
+  document.getElementById("loading").innerHTML = `<p style="color:rgba(255,100,100,0.8)">Failed to load map. Check your internet connection.</p>`;
+  console.error(err);
+});
+</script>
+</body>
+</html>
