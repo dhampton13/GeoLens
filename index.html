@@ -361,8 +361,8 @@ function openPanel(iso) {
   document.getElementById("panel-subtitle").textContent = `${d.capital} · ${d.pop}`;
   document.getElementById("leader-avatar").innerHTML =
   `<img src="${d.leader.image}" alt="${d.leader.name}" />`;
-  document.getElementById("leader-name").textContent = d.leader;
-  document.getElementById("leader-title").textContent = d.leaderTitle;
+  document.getElementById("leader-name").textContent = d.leader.name;
+  document.getElementById("leader-title").textContent = d.leader.title;
   document.getElementById("panel-overview").innerHTML = `
     <div class="panel-row"><span class="panel-key">Government</span><span class="panel-val">${d.government}</span></div>
     <div class="panel-row"><span class="panel-key">Religion</span><span class="panel-val">${d.religion}</span></div>
