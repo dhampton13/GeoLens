@@ -335,7 +335,8 @@ function openPanel(iso) {
   document.getElementById("panel-flag").textContent = d.flag;
   document.getElementById("panel-name").textContent = d.name;
   document.getElementById("panel-subtitle").textContent = `${d.capital} · ${d.pop}`;
-  document.getElementById("leader-avatar").textContent = d.leaderEmoji;
+  document.getElementById("leader-avatar").innerHTML =
+  `<img src="${d.leader.image}" alt="${d.leader.name}" />`;
   document.getElementById("leader-name").textContent = d.leader;
   document.getElementById("leader-title").textContent = d.leaderTitle;
   document.getElementById("panel-overview").innerHTML = `
