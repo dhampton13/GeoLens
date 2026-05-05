@@ -138,6 +138,48 @@
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    .dropdown-wrapper { position: relative; display: inline-block; }
+
+.dropdown-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: rgba(13,21,38,0.97);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: 200px;
+  backdrop-filter: blur(10px);
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.dropdown-panel.open { display: block; }
+
+.dropdown-header {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+}
+
+.cb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 4px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+  transition: background 0.15s;
+}
+.cb-row:hover { background: rgba(255,255,255,0.06); }
+.cb-row input { accent-color: #378ADD; cursor: pointer; }
+.cb-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    
   </style>
 </head>
 <body>
@@ -153,12 +195,45 @@
   </div>
 
   <div id="toolbar">
-    <button class="lens-btn active" data-lens="default">Default</button>
-    <button class="lens-btn" data-lens="government">Government</button>
-    <button class="lens-btn" data-lens="religion">Religion</button>
-    <button class="lens-btn" data-lens="alliances">Alliances</button>
-    <button class="lens-btn" data-lens="gdp">GDP tier</button>
+  <button class="lens-btn active" data-lens="default">Default</button>
+  <button class="lens-btn" data-lens="government">Government</button>
+  <button class="lens-btn" data-lens="religion">Religion</button>
+
+  <!-- Alliance dropdown -->
+  <div class="dropdown-wrapper">
+    <button class="lens-btn dropdown-trigger" id="alliance-trigger">Alliances ▾</button>
+    <div class="dropdown-panel" id="alliance-dropdown">
+      <div class="dropdown-header">Select alliances</div>
+      <label class="cb-row"><input type="checkbox" value="NATO" checked> <span class="cb-dot" style="background:#378ADD"></span> NATO</label>
+      <label class="cb-row"><input type="checkbox" value="EU" checked> <span class="cb-dot" style="background:#85B7EB"></span> European Union</label>
+      <label class="cb-row"><input type="checkbox" value="CSTO" checked> <span class="cb-dot" style="background:#D85A30"></span> CSTO (Russia)</label>
+      <label class="cb-row"><input type="checkbox" value="SCO" checked> <span class="cb-dot" style="background:#E24B4A"></span> SCO (China)</label>
+      <label class="cb-row"><input type="checkbox" value="BRICS" checked> <span class="cb-dot" style="background:#EF9F27"></span> BRICS</label>
+      <label class="cb-row"><input type="checkbox" value="Arab League" checked> <span class="cb-dot" style="background:#1D9E75"></span> Arab League</label>
+      <label class="cb-row"><input type="checkbox" value="AU" checked> <span class="cb-dot" style="background:#97C459"></span> African Union</label>
+      <label class="cb-row"><input type="checkbox" value="Non-aligned" checked> <span class="cb-dot" style="background:#888780"></span> Non-aligned</label>
+    </div>
   </div>
+
+  <!-- Resources dropdown -->
+  <div class="dropdown-wrapper">
+    <button class="lens-btn dropdown-trigger" id="resources-trigger">Resources ▾</button>
+    <div class="dropdown-panel" id="resources-dropdown">
+      <div class="dropdown-header">Select resource</div>
+      <label class="cb-row radio"><input type="radio" name="resource" value="oil"> <span class="cb-dot" style="background:#4A4A4A"></span> 🛢 Oil (top producers)</label>
+      <label class="cb-row radio"><input type="radio" name="resource" value="gas"> <span class="cb-dot" style="background:#6B8FA3"></span> 💨 Natural Gas</label>
+      <label class="cb-row radio"><input type="radio" name="resource" value="coal"> <span class="cb-dot" style="background:#7A6352"></span> ⛏ Coal</label>
+      <label class="cb-row radio"><input type="radio" name="resource" value="wheat"> <span class="cb-dot" style="background:#C8A84B"></span> 🌾 Wheat</label>
+      <label class="cb-row radio"><input type="radio" name="resource" value="lithium"> <span class="cb-dot" style="background:#7EC8C8"></span> ⚡ Lithium</label>
+      <label class="cb-row radio"><input type="radio" name="resource" value="gold"> <span class="cb-dot" style="background:#FFD700"></span> 🪙 Gold</label>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08)">
+        <button id="clear-resource" style="font-size:11px;color:rgba(255,255,255,0.4);background:none;border:none;cursor:pointer;padding:0;">✕ Clear selection</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="lens-btn" data-lens="gdp">GDP tier</button>
+</div>
 
   <div id="title-badge">
     <h1>GeoLens</h1>
@@ -421,15 +496,7 @@ function closePanel() {
 
 document.getElementById("panel-close").addEventListener("click", closePanel);
 
-document.querySelectorAll(".lens-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".lens-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    currentLens = btn.dataset.lens;
-    updateColors();
-    updateLegend();
-  });
-});
+
 
 // ─────────────────────────────────────────────
 //  MAP INIT
@@ -505,6 +572,183 @@ async function initMap() {
 initMap().catch(err => {
   document.getElementById("loading").innerHTML = `<p style="color:rgba(255,100,100,0.8)">Failed to load map. Check your internet connection.</p>`;
   console.error(err);
+});
+
+  // ── Resource data: ISO3 codes for top producers of each resource ──
+const RESOURCE_DATA = {
+  oil:     { label:"Oil producers", color:"#c2410c", countries:["SAU","RUS","USA","IRN","IRQ","CHN","ARE","KWT","NGA","KAZ"] },
+  gas:     { label:"Gas producers", color:"#6B8FA3", countries:["USA","RUS","IRN","CHN","QAT","AUS","SAU","NOR","TKM","ARE"] },
+  coal:    { label:"Coal producers", color:"#7A6352", countries:["CHN","IND","USA","AUS","IDN","RUS","ZAF","DEU","POL","KAZ"] },
+  wheat:   { label:"Wheat producers", color:"#C8A84B", countries:["CHN","IND","RUS","USA","FRA","AUS","CAN","PAK","UKR","ARG"] },
+  lithium: { label:"Lithium producers", color:"#7EC8C8", countries:["AUS","CHL","CHN","ARG","BRA","ZWE","PRT","USA","CAN","CZE"] },
+  gold:    { label:"Gold producers",  color:"#FFD700", countries:["CHN","AUS","RUS","USA","CAN","GHA","ZAF","MEX","PER","UZB"] },
+};
+
+// Alliance membership map
+const ALLIANCE_MEMBERSHIP = {
+  "NATO":       ["USA","GBR","FRA","DEU","ITA","ESP","POL","TUR","NLD","BEL","GRC","HUN","CZE","SVK","HRV","ROU","BGR","PRT","NOR","DNK","ISL","LVA","LTU","EST","ALB","MNE","MKD","SVN","LUX"],
+  "EU":         ["DEU","FRA","ITA","ESP","POL","NLD","BEL","GRC","HUN","CZE","SVK","HRV","ROU","BGR","PRT","AUT","SWE","DNK","FIN","IRL","LUX","SVN","LVA","LTU","EST","CYP","MLT"],
+  "CSTO":       ["RUS","BLR","KAZ","KGZ","TJK","ARM"],
+  "SCO":        ["CHN","RUS","IND","PAK","KAZ","KGZ","TJK","UZB","IRN"],
+  "BRICS":      ["BRA","RUS","IND","CHN","ZAF","SAU","ARE","ETH","EGY","IRN","ARG"],
+  "Arab League":["SAU","EGY","IRQ","SYR","JOR","LBN","LBY","TUN","DZA","MAR","SDN","YEM","ARE","QAT","KWT","BHR","OMN","COM","DJI","MRT","SOM","PSE"],
+  "AU":         ["NGA","ZAF","ETH","KEN","GHA","TZA","EGY","DZA","MAR","SDN","AGO","MOZ","MDG","CMR","CIV","SEN","TCD","MLI","BFA","GIN"],
+  "Non-aligned":["IND","BRA","ZAF","IDN","MEX","NGA","ARG","COL","VEN","CUB","EGY","PAK"],
+};
+
+const ALLIANCE_COLORS = {
+  "NATO":"#378ADD","EU":"#85B7EB","CSTO":"#D85A30","SCO":"#E24B4A",
+  "BRICS":"#EF9F27","Arab League":"#1D9E75","AU":"#97C459","Non-aligned":"#888780"
+};
+
+let activeMode = "default"; // "default"|"government"|"religion"|"gdp"|"alliances"|"resource"
+let activeAlliances = new Set(Object.keys(ALLIANCE_COLORS));
+let activeResource = null;
+
+function getAllianceColor(iso) {
+  for (const [alliance, members] of Object.entries(ALLIANCE_MEMBERSHIP)) {
+    if (members.includes(iso) && activeAlliances.has(alliance)) {
+      return ALLIANCE_COLORS[alliance];
+    }
+  }
+  return null;
+}
+
+function applyColors() {
+  Object.entries(pathsByISO).forEach(([iso, el]) => {
+    let fill = "#1a2e4a";
+    let opacity = 1;
+
+    if (activeMode === "default") {
+      fill = COUNTRIES[iso] ? "#1e3a5f" : "#1a2e4a";
+
+    } else if (activeMode === "government") {
+      const d = COUNTRIES[iso];
+      fill = d ? (LENSES.government.values[d.government] || "#1a2e4a") : "#1a2e4a";
+
+    } else if (activeMode === "religion") {
+      const d = COUNTRIES[iso];
+      fill = d ? (LENSES.religion.values[d.religion] || "#1a2e4a") : "#1a2e4a";
+
+    } else if (activeMode === "gdp") {
+      const d = COUNTRIES[iso];
+      fill = d ? (LENSES.gdp.values[d.gdp] || "#1a2e4a") : "#1a2e4a";
+
+    } else if (activeMode === "alliances") {
+      const color = getAllianceColor(iso);
+      if (color) { fill = color; } else { fill = "#111827"; opacity = 0.4; }
+
+    } else if (activeMode === "resource" && activeResource) {
+      const res = RESOURCE_DATA[activeResource];
+      if (res.countries.includes(iso)) {
+        fill = res.color;
+      } else {
+        fill = "#111827"; opacity = 0.35;
+      }
+    }
+
+    el.attr("fill", fill).attr("opacity", opacity);
+  });
+}
+
+// ── Dropdown open/close logic ──
+function closeAllDropdowns() {
+  document.querySelectorAll(".dropdown-panel").forEach(p => p.classList.remove("open"));
+  document.querySelectorAll(".dropdown-trigger").forEach(b => b.classList.remove("active"));
+}
+
+document.getElementById("alliance-trigger").addEventListener("click", e => {
+  e.stopPropagation();
+  const panel = document.getElementById("alliance-dropdown");
+  const isOpen = panel.classList.contains("open");
+  closeAllDropdowns();
+  if (!isOpen) {
+    panel.classList.add("open");
+    document.getElementById("alliance-trigger").classList.add("active");
+    activeMode = "alliances";
+    deactivateSimpleLens();
+    applyColors();
+    updateLegendForAlliances();
+  }
+});
+
+document.getElementById("resources-trigger").addEventListener("click", e => {
+  e.stopPropagation();
+  const panel = document.getElementById("resources-dropdown");
+  const isOpen = panel.classList.contains("open");
+  closeAllDropdowns();
+  if (!isOpen) {
+    panel.classList.add("open");
+    document.getElementById("resources-trigger").classList.add("active");
+  }
+});
+
+document.addEventListener("click", () => closeAllDropdowns());
+document.querySelectorAll(".dropdown-panel").forEach(p => p.addEventListener("click", e => e.stopPropagation()));
+
+// ── Alliance checkboxes ──
+document.querySelectorAll("#alliance-dropdown input[type=checkbox]").forEach(cb => {
+  cb.addEventListener("change", () => {
+    if (cb.checked) activeAlliances.add(cb.value);
+    else activeAlliances.delete(cb.value);
+    applyColors();
+    updateLegendForAlliances();
+  });
+});
+
+// ── Resource radios ──
+document.querySelectorAll("input[name=resource]").forEach(radio => {
+  radio.addEventListener("change", () => {
+    activeResource = radio.value;
+    activeMode = "resource";
+    deactivateSimpleLens();
+    closeAllDropdowns();
+    applyColors();
+    updateLegendForResource();
+  });
+});
+
+document.getElementById("clear-resource").addEventListener("click", e => {
+  e.stopPropagation();
+  activeResource = null;
+  activeMode = "default";
+  document.querySelectorAll("input[name=resource]").forEach(r => r.checked = false);
+  applyColors();
+  updateLegend();
+});
+
+function deactivateSimpleLens() {
+  document.querySelectorAll(".lens-btn:not(.dropdown-trigger)").forEach(b => b.classList.remove("active"));
+}
+
+function updateLegendForAlliances() {
+  document.getElementById("legend-title").textContent = "Alliances";
+  const container = document.getElementById("legend-items");
+  container.innerHTML = "";
+  activeAlliances.forEach(a => {
+    container.innerHTML += `<div class="legend-item"><div class="legend-swatch" style="background:${ALLIANCE_COLORS[a]}"></div><span class="legend-label">${a}</span></div>`;
+  });
+}
+
+function updateLegendForResource() {
+  const res = RESOURCE_DATA[activeResource];
+  document.getElementById("legend-title").textContent = res.label;
+  document.getElementById("legend-items").innerHTML =
+    `<div class="legend-item"><div class="legend-swatch" style="background:${res.color}"></div><span class="legend-label">Top 10 producers</span></div>
+     <div class="legend-item"><div class="legend-swatch" style="background:#111827;border:1px solid rgba(255,255,255,0.1)"></div><span class="legend-label">Not in top 10</span></div>`;
+}
+
+// ── Hook simple lens buttons to use applyColors ──
+document.querySelectorAll(".lens-btn:not(.dropdown-trigger)").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".lens-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    activeMode = btn.dataset.lens;
+    activeResource = null;
+    closeAllDropdowns();
+    applyColors();
+    updateLegend();
+  });
 });
 </script>
 </body>
